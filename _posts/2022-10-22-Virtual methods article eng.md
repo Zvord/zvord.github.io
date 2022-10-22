@@ -692,5 +692,3 @@ So, don't be afraid of virtual methods because of the additional overhead and do
 * Virtual methods should not be used in a constructor, in `wait()` and `@()` expressions, or where there is a dependency on a specific method implementation.
 * From a virtual method, you can call its previous implementations using the `::` operator and `super`.
 * It takes more time to call a virtual method than to call a non-virtual one. However, this difference is not so great to care about it when creating a method.
-
-#Project 
