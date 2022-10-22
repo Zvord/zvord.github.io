@@ -28,7 +28,7 @@ url: "https://zvord.github.io/" # the base hostname & protocol for your site, e.
 github_username:  zvord
 
 # Build settings
-remote_theme: pages-themes/cayman@v0.2.0
+remote_theme: pages-themes/cayman
 plugins:
   - jekyll-feed
   - jekyll-remote-theme # add this line to the plugins list if you already have one

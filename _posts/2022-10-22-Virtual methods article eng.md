@@ -6,7 +6,6 @@ date:   2022-10-22 16:11:16 +0300
 
 ![]({{ site.baseurl }}/assets/images/virtual/madmark.png)
 
-# Introduction
 I'm one of those weird guys who from time to time write answers on [r/systemverilog](https://www.reddit.com/r/systemverilog/) One day I saw there a rather simple question from my point of view: what is a virtual method? A protracted discussion showed that the question isn't that simple if you come to SystemVerilog with no OOP experience in other languages. Inheritance, method overrides, reference types - all these are the concepts crucial to understanding virtual methods work.
 
 Let's try to figure it out.
