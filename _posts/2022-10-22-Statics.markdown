@@ -11,7 +11,7 @@ This is a translation of my [original post on FPGA-Systems](https://fpga-systems
 
 There may be some confusion between static tasks and functions in classes and modules, as well as subtle differences between various simulators' behaviour in this regard. I try to shed some light on the nature of static things in SystemVerilog. If you already understand it, I suggest going straight to the [Experiments](#experiments) section. Some findings there might surprise you.
 
-![](_images/statics/plasma-bal-gba531b96c_1280.jpg)
+![]({{ site.baseurl }}/images/statics/plasma-bal-gba531b96c_1280.jpg)
 
 ## Table of Contents
 1. [Introduction](#introduction)
