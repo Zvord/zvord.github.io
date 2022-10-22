@@ -22,7 +22,7 @@ title: Verification Haven
 email: barkovian@gmail.com
 description: >- # this means to ignore newlines until "baseurl:"
   This is what you get when an academy-bitten brain thinks about design verificaion.
-baseurl: "" # the subpath of your site, e.g. /blog
+baseurl: "/jekyll" # the subpath of your site, e.g. /blog
 url: "" # the base hostname & protocol for your site, e.g. http://example.com
 #twitter_username: jekyllrb
 github_username:  zvord
