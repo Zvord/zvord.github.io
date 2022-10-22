@@ -1,0 +1,829 @@
+---
+layout: post
+title:  "Statics in SystemVerilog"
+date:   2022-10-22 12:11:16 +0300
+categories: jekyll update
+---
+
+# Statics in SystemVerilog
+
+This is a translation of my [original post on FPGA-Systems](https://fpga-systems.ru/publ/jazyki/systemverilog/staticheskoe_v_systemverilog/13-1-0-142), an awesome Russian-speaking community for everything FPGA.
+
+There may be some confusion between static tasks and functions in classes and modules, as well as subtle differences between various simulators' behaviour in this regard. I try to shed some light on the nature of static things in SystemVerilog. If you already understand it, I suggest going straight to the [Experiments](#experiments) section. Some findings there might surprise you.
+
+![](_images/statics/plasma-bal-gba531b96c_1280.jpg)
+
+## Table of Contents
+1. [Introduction](#introduction)
+2. [Modules](#modules)
+3. [Classes](#classes)
+4. [Why are the statics different](#why-are-the-statics-different)
+5. [Experiments](#experiments)
+6. [Conclusion](#conclusion)
+
+## Introduction
+Let's agree that by *method* we understand both functions and tasks task of a class. Functions and tasks of a module will be called *subroutines*. By *module* we will also understand both an interface and a program ( program ). The differences between modules, interfaces and programs are not essential for our story, everything being said about modules shall also be applied to them.
+
+For the language standard, we will refer to the [IEEE Std 1800-2017 document](https://fpga--systems-ru.translate.goog/go?https://ieeexplore.ieee.org/document/8299595&_x_tr_sl=ru&_x_tr_tl=en&_x_tr_hl=en-US&_x_tr_pto=wapp "https://ieeexplore.ieee.org/document/8299595").
+
+For all code examples, except for synthesis, a link to the [EDA Playground](https://edaplayground.com/) is attached. Each example has been tested in Riviera, Xcelium, Questa and VCS. A non-corporate account with Aldec Riviera will suffice to reproduce the examples on your own.
+
+_A static variable_ in programming is a variable that is created at the time the program starts. It is available from the moment of launch until the end of the program. The opposite of a static variable is an *automatic variable*. They are called so because the memory for them is allocated _automatically_ when the program execution reaches the scope of the given variable and is also freed when the execution leaves the scope.
+
+In SystemVerilog, not only variables can be static, but also methods, as well as entire blocks, such as a module and a program.
+
+We'll start with the most practical question: how static functions and tasks work. First, let's look at this issue in the context of modules, and then move on to classes.
+
+## Modules
+### Definition
+The signature of an automatic routine looks like this:
+
+```verilog
+task automatic foo(int a, int b); 
+function automatic int bar(int a, int b);
+```
+
+Note that the word automatic comes after the word "task".
+
+If `automatic` is omitted or replaced with `static`, then the routine becomes static.
+
+A subroutine's lifetime defines the default lifetime of its local variables and input arguments, but each variable can be specified to have a particular lifetime. So, if the subroutine is static, then its variables will be static unless the `automatic` keyword is set. Conversely, all automatic function variables are automatic when declared without the `static` keyword.
+
+Although we say that a subroutine can be static or automatic, instead of "static subroutine" it would be more correct to say "a subroutine in which all variables are static". But since we understand what's going on, no need for such cumbersome phrases.
+
+The standard does not say that we can explicitly set the lifetime of input arguments. However, Xcelium allows specifying a lifetime inside the subroutine's signature, for whatever sick reason one may want it. Other simulators do not take part in this frivolity.
+
+### Examples
+Consider the following example.
+
+[Static and Dynamic tasks example](https://www.edaplayground.com/x/VGzt)
+
+```verilog
+ module test();
+ 
+  task static static_add(int a, int b);
+    #2;
+    $display("Sum: %0d", a+b);
+  endtask
+  
+  task automatic automatic_add(int a, int b);
+    #2;
+    $display("Sum: %0d", a+b);
+  endtask
+ 
+  initial begin
+    $display("Test for static");
+    fork
+      begin
+        static_add(1,2);
+      end
+      begin
+        #1;
+        static_add(3,4);
+      end  
+    join
+    
+    $display("Test for automatic");
+    fork
+      begin
+        automatic_add(1,2);
+      end
+      begin
+        #1;
+        automatic_add(3,4);
+      end  
+    join
+    
+  end
+    
+endmodule
+```
+
+The simulation gives us this output:
+
+```log
+# KERNEL: Test for static
+# KERNEL: Sum: 7
+# KERNEL: Sum: 7 
+# KERNEL: Test for automatic 
+# KERNEL: Sum: 3 
+# KERNEL: Sum: 7
+```
+
+The input arguments of the `static_add` subroutine are static, that is, they always refer to the same memory location. The first call occurred at 0 ns and the arguments became equal to 1 and 2. At 1 ns, 3 and 4 were written to the same memory areas. Since the subroutine variables are accessed only with a delay of 2 ns, both calls will see the same value of the variables `a` and `b`.
+
+In contrast, for our subroutine's automatic brother, `automatic_add`, memory allocation for `a` and `b` occurs on each call, so each call will see its input argument value.
+
+A more detailed explanation of what is happening is presented in the following diagram.
+![](_images/statics/Static%20and%20Automatic%20Subroutines%20eng.png)
+
+The ability to safely call the same subroutine from different processes is called [reentrancy](https://en.wikipedia.org/wiki/Reentrancy_(computing)). Using such subroutines reduces unexpected side effects and is considered to be a good practice.
+
+Small digression. No need to be afraid of the words “memory allocation” and think that now everything will become slow. Space for local variables is allocated on the stack ( [Stack-based memory allocation - Wikipedia](https://en.wikipedia.org/wiki/Stack-based_memory_allocation) ). This is the natural way of dealing with memory in most programming languages, from assembly and C to SystemVerilog and Haskell.
+
+At the end of the article, we will set up a small experiment to study this issue.
+
+Let's consider an example of modifying the lifetime of local variables of a function with keywords: [Static and Dynamic variables example](https://www.edaplayground.com/x/PwwJ)
+
+```verilog
+module foo();
+ 
+  function void good_increment(int inc_value);
+    int counter;
+    counter += inc_value;
+    $display("Incremented value: %0d", counter);
+  endfunction
+  
+  function void bad_increment(int inc_value);
+    automatic int counter;
+    counter += inc_value;
+    $display("Incremented value: %0d", counter);
+  endfunction
+ 
+  initial begin
+    $display("Test for static");
+    good_increment(1);
+    good_increment(2);
+    
+    $display("Test for automatic");
+    bad_increment(1);
+    bad_increment(2);
+  end
+    
+endmodule
+
+module tb;
+  foo u_foo();
+  initial begin
+    #1;
+    $display("We can access counter directly: %0d", ++u_foo.good_increment.counter);
+  end
+endmodule
+```
+
+As expected, the static variable in `good_increment` retains its value between calls, unlike the automatic variable in `bad_increment`. Another interesting detail: a _static variable can be referred to by its hierarchical name_. From this, we can conclude that static variables in different instances of the same module are also different. Indeed, the standard (13.3.2) has an explicit requirement for this. Such hierarchical access to an automatic variable is impossible since the variable simply does not exist (memory is not allocated) before the program enters its scope.
+
+Let's consider one more example where an automatic variable is indispensable. A fairly typical task is to start several parallel processes from a loop, passing the value of a loop variable to each process.
+
+[Fork Loop in a Module](https://www.edaplayground.com/x/Smdr)
+
+```verilog
+module tb;
+  
+  task automatic wait_task(int delay);
+    $display("%0d ns: Wait for %0d ns started", $time(), delay);
+    #(delay * 1ns);
+    $display("%0d ns: Wait for %0d ns completed", $time(), delay);
+  endtask
+  
+  initial begin
+    for(int i = 0; i < 3; i++) begin
+      fork 
+        automatic int k = i;
+        wait_task(k);
+      join_none
+    end
+    wait fork;
+  end
+     
+endmodule
+```
+The naive solution would be to call `wait_task(i)` without using an intermediate variable. However, new processes will only be started when the parent has suspended (Table 9.1 of the standard), and at this moment the value of `i` will already be 3. That is, `wait_task(3)` will be run three times. The reader can make appropriate changes to the example code and see the following output:
+```
+# KERNEL: 0 ns: Wait for 3 ns started
+# KERNEL: 0 ns: Wait for 3 ns started
+# KERNEL: 0 ns: Wait for 3 ns started
+# KERNEL: 3 ns: Wait for 3 ns completed
+# KERNEL: 3 ns: Wait for 3 ns completed
+# KERNEL: 3 ns: Wait for 3 ns completed
+```
+To achieve the desired behaviour, we should declare a new variable inside the fork and initialize it with the value `i`. According to the standard (9.3.2), initialization will be done immediately. However, in modules, all variables are static by default, so for each process to get its value, you need to explicitly write `automatic`.
+
+Let's note one more detail from this example. Omitting the `automatic` keyword here shall produce a compilation error. Even though module variables are static by default, we don't just declare a variable, we also *initialize* it. The standard requires explicitly specifying the lifetime of a variable in a static subroutine or block if it has initialization in its declaration. This way the user specifies whether she wants to initialize the variable on every iteration (`automatic`), or only once (`static`). However, in this case, we cannot use `static` because the standard prohibits the initialization of a static variable with an automatic value. This is an understandable limitation: static variables are initialized at the time the simulation starts, and at this time the memory for automatic ones has not yet been allocated. None of the tested simulators compiled either the static version or the version without any keyword.
+
+We have seen how the automatic lifetime modifier is applied to variables and subroutines, but it can also be applied to an entire module. This changes the default lifetime from static to automatic for subroutine variables and initial and always blocks.
+
+Try in the previous example to change the module declaration to
+```
+module automatic foo();
+```
+Will it compile? Why? Correct and check that the output is as expected.
+
+Consider another example of modifying the lifetime for the entire module. This time with always.
+
+[Automatic always](https://www.edaplayground.com/x/7fyT)
+
+```verilog
+module automatic foo;
+  always #1 begin
+    int x;
+    $display("Automatic: %0d", x++);
+  end
+  
+  always #1 begin
+    static int x;
+    $display("Static: %0d", x++);
+  end
+  
+  initial begin
+    #10;
+    $finish;
+  end
+endmodule
+```
+
+```log
+# KERNEL: Automatic: 0  
+# KERNEL: Static: 0  
+# KERNEL: Automatic: 0  
+# KERNEL: Static: 1  
+# KERNEL: Automatic: 0  
+# KERNEL: Static: 2  
+# KERNEL: Automatic: 0  
+# KERNEL: Static: 3  
+# KERNEL: Automatic: 0  
+# KERNEL: Static: 4  
+# KERNEL: Automatic: 0  
+# KERNEL: Static: 5  
+# KERNEL: Automatic: 0  
+# KERNEL: Static: 6  
+# KERNEL: Automatic: 0  
+# KERNEL: Static: 7  
+# KERNEL: Automatic: 0  
+# KERNEL: Static: 8
+```
+Having all routines with automatic lifetimes by default can be handy. Is it convenient for `always`? Not sure.
+
+### What else?
+Another difference between static and automatic subroutines follows from the difference in the lifetime of variables: recursive call safety. The standard does not prohibit the recursive call of static subroutines, but carelessness can lead to completely different results than we expected.
+
+[In this example](https://www.edaplayground.com/x/X9aK) , the code from clause 13.4.2 of the standard was taken as a basis.
+```verilog
+module tryfact;
+  
+    function integer factorial (input [31:0] operand);
+      if (operand >= 2) begin
+         $display("Entering operand = %0d", operand);
+        factorial = factorial(operand - 1) * operand;
+         $display("Exiting operand = %0d", operand);
+      end else
+        factorial = 1;
+    endfunction: factorial
+        
+  integer result;
+  initial begin
+    result = factorial(5);
+    $display("%0d factorial = %0d", 5, result);
+  end
+endmodule: tryfact
+```
+Here the expression `factorial = factorial(operand - 1) * operand;` cannot be evaluated until the next call to factorial is made. But this call will overwrite the input argument of `operand`. 
+```log
+# KERNEL: Entering operand = 5  
+# KERNEL: Entering operand = 4  
+# KERNEL: Entering operand = 3  
+# KERNEL: Entering operand = 2  
+# KERNEL: Exiting operand = 1  
+# KERNEL: Exiting operand = 1  
+# KERNEL: Exiting operand = 1  
+# KERNEL: Exiting operand = 1  
+# KERNEL: 5 factorial = 1
+```
+
+### When to use?
+When should you use static routines and when should you use automatic routines? I am not aware of cases where a static subroutine is needed. If you are not 100% sure that you need a static subroutine, use an automatic one. Due to their reentrancy, they are more secure - there is no need to track and synchronize all calls.
+
+On the contrary, applying `automatic` to the entire module can be dangerous due to changing the lifetime of variables in always blocks. This behaviour will be unexpected for readers of the code, and the author himself may forget about this nuance.
+
+## Classes
+### Definition
+A static class method is declared like this:
+```verilog
+static task static_add(int a, int b, output int c);
+static function int static_add(int a, int b);
+```
+Note that the `static` keyword comes before `task/function`. It's the opposite in modules: `static` was placed after.
+
+If `static` is omitted, the method becomes non-static. The `automatic` keyword is not allowed in this context.
+
+Wait a minute... Why is it not allowed? Why do we say "non-static" instead of "automatic"? Why is the keyword put in the wrong place? If it already seems to you that everything is completely different with static methods compared to subroutines in modules, then you are right. We will deal with all these issues. First of all, let's see what static methods are and how they work.
+
+A static class method is associated with the class itself, not with an instance of the class. This means that:
+1. A static method can be called without having any instances, using the class name as the scope.
+2. A static method cannot access non-static class properties.
+
+From the usage point of view, there are no other differences between static methods and non-static ones.
+
+### Examples
+To illustrate, let's make minimal changes to the first example, turning the modules into classes: [Static and Dynamic tasks example for class](https://fpga--systems-ru.translate.goog/go?https://www.edaplayground.com/x/Xu2c&_x_tr_sl=ru&_x_tr_tl=en&_x_tr_hl=en-US&_x_tr_pto=wapp "https://www.edaplayground.com/x/Xu2c").
+
+```verilog
+class foo;
+ 
+  static task static_add(int a, int b);
+    #2;
+    $display("Sum: %0d", a+b);
+  endtask
+  
+  task automatic_add(int a, int b);
+    #2;
+    $display("Sum: %0d", a+b);
+  endtask
+  
+  task my_initial;
+    $display("Test for static");
+    fork
+      begin
+        static_add(1,2);
+      end
+      begin
+        #1;
+        static_add(3,4);
+      end  
+    join
+    
+    $display("Test for automatic");
+    fork
+      begin
+        automatic_add(1,2);
+      end
+      begin
+        #1;
+        automatic_add(3,4);
+      end  
+    join
+  endtask
+ 
+  function new();
+    fork
+      my_initial();
+    join_none
+  endfunction
+    
+endclass
+
+module tb;
+  foo foo_h;
+  
+  initial begin
+    foo_h = new();
+    #10;
+    $display("Call using only a class name");
+    foo::static_add(2, 2);
+  end
+  
+endmodule
+```
+
+Output:
+```
+# KERNEL: Test for static
+# KERNEL: Sum: 3
+# KERNEL: Sum: 7
+# KERNEL: Test for automatic
+# KERNEL: Sum: 3
+# KERNEL: Sum: 7
+# KERNEL: Call using only a class name
+# KERNEL: Sum: 4
+```
+We see that there is no difference between the work of static and non-static methods. Both of them worked as an automatic subroutine in a module. However, an instance of the class is not necessary to use a static method:
+```
+foo::static_add(2, 2);
+```
+Calling a non-static one in this fashion will not work - this is a compilation error. Moreover, it is better to call static methods in this way, using the name of the class, not the object. So it immediately becomes clear to the reader that this method is static.
+
+A static property of a class follows the same rules as static methods - it belongs to the class, not to an instance, that is, it can be accessed by the name of the class, and each instance of the class, when accessing a static property, will access the same memory area.
+
+Declaring a static class variable also looks similar.
+```verilog
+class foo;
+  static int bar;
+endclass
+```
+A variable can also be declared static in a class method (it doesn't matter if the method itself is static or not). And in this case, all instances of the class will access the same memory area.
+
+Let's illustrate with an example: [Static and Dynamic variables example for class](https://www.edaplayground.com/x/YUtS).
+```verilog
+class foo;
+  
+  static int static_count;
+  int local_count;
+  function new();
+    static_count++;
+    local_count++;
+  endfunction
+ 
+  function void good_increment(int inc_value);
+    static int counter;
+    counter += inc_value;
+    $display("Incremented value: %0d", counter);
+  endfunction
+  
+  function void bad_increment(int inc_value);
+    int counter;
+    counter += inc_value;
+    $display("Incremented value: %0d", counter);
+  endfunction
+endclass
+
+module tb;
+  foo foo_1;
+  foo foo_2;
+  initial begin
+    foo_1 = new();
+    $display("Create the first instance and check count.  Static: %0d Local: %0d", foo_1.static_count, foo_1.local_count);
+    foo_2 = new();
+    $display("Create the second instance and check count. Static: %0d Local: %0d", foo::static_count, foo_2.local_count);
+    $display("Test for static");
+    foo_1.good_increment(1);
+    foo_2.good_increment(2);
+    
+    $display("Test for automatic");
+    foo_1.bad_increment(1);
+    foo_2.bad_increment(2);
+  end
+endmodule
+```
+
+```log
+# KERNEL: Test for static  
+# KERNEL: Incremented value: 1  
+# KERNEL: Incremented value: 3  
+# KERNEL: Test for automatic  
+# KERNEL: Incremented value: 1  
+# KERNEL: Incremented value: 2
+```
+A few things shall be highlighted here. First, you can see that the static class variable `static_count` is common to all instances. Secondly, we can refer to it both by the instance and by the class name. Third, repeated calls to the non-static `good_increment` method increment the value of the same variable, as expected.
+
+The following diagram shows a detailed breakdown of the example.
+![](_images/statics/Static%20and%20Automatic%20in%20classes%20eng.png)
+
+Let's recall the example of running processes from a loop. Since variables in module routines have a static lifetime by default, we had to declare an intermediate automatic variable. In classes, however, this is redundant: method variables are automatic by default. So, the following code is enough for proper execution:
+```verilog
+for(int i = 0; i < 3; i++) begin
+  fork 
+    int k = i;
+    wait_task(k);
+  join_none
+end
+wait fork;
+```
+
+### What else?
+Now that we understand how static methods work, we can return to the question of differences between a module's static routine and a class' static method. The standard has an explicit indication of the difference in clause 8.10. In the first case, the word “static” describes the lifetime of the subroutine variables. In the second case, the lifetime of the method in the class. We cannot call a non-static method before the instance is created: a non-static method begins its existence with the creation of an object and ends with its destruction. A static method always exists.
+
+For the same reason, the word “automatic” cannot be used to describe non-static methods. Strictly speaking, only variables can be automatic, although we call subroutines that way for simplicity of speech. Note that local variables of methods are automatic by default, and in this sense, a method can be called automatic. This is what the standard means in clause 8.6 when it says that methods have an automatic lifetime.
+
+Let us dwell in more detail on the automatic lifetime of the method. The standard explicitly forbids setting a class method to a static lifetime (in the sense of module routines), as specified in clauses 8.6 and 8.10. However, all 4 simulators were able to compile even
+```
+static task static
+```
+Such syntax was once allowed in days of yore, but at least since the 2012 version of the standard, it is no longer possible to write `task/function static` in a class. I think it goes without saying usage of this illegal feature would be a bad idea. If you find yourself in need of the same behaviour from a class method as from a static module subroutine, this can be easily achieved by using static methods along with static class variables.
+
+Perhaps this liberty of simulators can explain another violation of the standard. [Try to access a static variable in a method](https://www.edaplayground.com/x/Ke2e).
+```verilog
+class foo;
+  static function void increment();
+    static int cnt = 0;
+    $display(++cnt);
+  endfunction
+  
+  function void local_increment();
+    static int cnt = 0;
+    $display(++cnt);
+  endfunction
+ 
+endclass
+
+module tb;
+  foo bar;
+  initial begin
+    $display("Non-static:");
+    foo::increment();
+    $display(++foo::increment.cnt);
+    $display("Static:");
+    bar = new();
+    bar.local_increment();
+    $display(++bar.local_increment.cnt);
+  end
+endmodule
+```
+
+All 4 simulators were able to access the static variable of a static method, Riviera and VCS were even able to access the static variable of a non-static method, although I did not expect that anyone would compile this nonsense. It follows from paragraph 6.21 of the standard that it is impossible to access a static variable of an automatic function/task by hierarchical name, and, as we have already seen, class methods must have an automatic lifetime. In any case, accessing static variables of any methods from outside the method itself should be avoided: this increases the coherence and breaks the very concept of a local variable.
+
+We also avoid calling non-static methods dynamic. Firstly, it can create unnecessary associations with static/dynamic dispatch (which we will have to briefly mention in the Experiments section), and secondly, dynamic is something that changes during program execution, like a dynamic array. It has nothing to do with methods.
+
+### When to use?
+As a rule of thumb, two kinds of situations that call for the usage of static classes and methods: when creating an instance of the class using `new` for some reason is not possible, or when the method uses only the static fields of the class and input arguments, without accessing the instance fields. Let's consider examples of such situations.
+
+#### Singleton pattern
+Sometimes we want to limit a certain class to have only one instance and make this instance available for a wide range of components in a testbench. It can be a logger of various events, or some global configuration.
+
+To implement a singleton, we should protect the class' constructor from being called more than once:
+```verilog
+class foo;
+  protected static foo singleton;
+  protected function new(); endfunction
+  static function foo get();
+    if (singleton == null)
+      singleton = new();
+    return singleton;
+  endfunction
+endclass
+```
+The constructor is declared as protected, which makes it impossible to create an object anywhere except in the class itself. A single pointer to an object is also protected from an accidental setting it to `null`. At any point in the code where the class `foo` is visible, you can call `foo::get()` and get an instance.
+
+It should be possible to create an object not in the `get` method, but during initialization:
+```
+protected static foo singleton = new();
+```
+However, Questa does not compile this, referring to the fact that the constructor is declared as protected. The standard in clause 8.18 allows access to protected methods and class fields within the class, even if it is a different instance, so the legality of Questa's behaviour is questionable.
+
+#### Factory pattern
+Let's analyze two more situations in which the direct use of the constructor is impossible.
+
+- We want to alter some features by extending a class and instantiating a derived class in place of the base. How to do this without modifying the original code?
+- SystemVerilog does not allow method overloading, that is, writing methods with the same name but different input arguments. How to get around this limitation for constructors?
+
+In both cases, you can use the "factory" pattern. It is a class or method that creates instances of the required class. This pattern [is implemented in UVM](https://fpga--systems-ru.translate.goog/go?https://verificationacademy.com/verification-methodology-reference/uvm/docs_1.1a/html/files/base/uvm_factory-svh.html&_x_tr_sl=ru&_x_tr_tl=en&_x_tr_hl=en-US&_x_tr_pto=wapp "https://verificationacademy.com/verification-methodology-reference/uvm/docs_1.1a/html/files/base/uvm_factory-svh.html") and does a great job with the first task. Let's see how we can use this pattern to solve the second problem.
+```verilog
+class my_time;
+  
+  int hours;
+  int minutes;
+  int seconds;
+  
+  static function my_time from_string(string raw);
+    // convert "23:19:59" into three ints
+  endfunction
+  
+  static function my_time from_int(int raw);
+    // convert seconds since epoch into three ints
+  endfunction
+  
+  function new (int h = 0, int m = 0, int s = 0);
+    //...
+  endfunction
+  
+endclass
+```
+The time can be specified as a string, seconds since the Unix epoch, or simply as hours, minutes, and seconds. We are limited to a single constructor, but there can be as many static methods as you like to receive various time formats, convert them and call the constructor. The methods `from_string` and `from_int` are called _factory_ methods.
+
+Creating a class looks like this:
+```verilog
+my_time handle = my_time::from_string("01:02:03");
+```
+One might argue that static methods are not required here. You can make the `from_string` method non-static and create a class like this:
+```verilog
+my_time handle = new();
+handle.from_string("01:02:03");
+```
+This approach is indeed functionally equivalent, but requires two actions instead of one, but does not offer anything in return. The call to the constructor is just an implementation detail that should be hidden if possible. The code will be cleaner with the factory method.
+
+#### Method group
+Static classes offer a convenient way to group functions which require only input arguments to be computed, that is, not dependent on any state. Sure, one can also use a package in this case, but a static class further hides function names from the package scope, thus reducing the probability of name collisions. Also, one can use a static property as a configuration parameter for these functions. 
+
+## Why are the statics different?
+We have seen that the word "static" means different things in the context of classes and modules. Let's try, if not to explain, then at least to reconcile ourselves with such an overabundance of statics.
+
+A module is a static structure. The hierarchy of modules and their connections are created at the moment of simulation start (more precisely, at the stage of elaboration). In this sense, the module is static: it always exists. Module variables are local to the module instance, as required by the synthesis logic. Making them static in the sense of class variables does not make any sense for hardware description. Module routines are always available and therefore are static in the sense of methods. All module variables are also static, and therefore can be accessed by both static and automatic subroutines.
+
+Classes, on the other hand, are dynamic. We do not know in advance where, how many and what classes will be created. Static properties give us the ability to communicate between class instances. Static methods allow you not to create class instances unnecessarily. Does it make sense for static class methods to behave the same way as module subroutines? Obviously not. This only limits our possibilities, and if necessary, this behaviour can be achieved using static properties.
+
+Thus, static methods in classes and static subroutines in modules are really static in their own right, and the way they work adheres to the properties of modules and classes.
+
+## Experiments
+So, we've looked at how statics work in modules and classes and figured out why they work the way they do.
+
+Let's touch on two more related topics: speed and synthesis.
+
+### Can static methods and subroutines be faster?
+When we looked at the work of static subroutines, we said that you should not count on a speed increase when using static methods.
+
+But should you, really? Let's find out in a little [experiment](https://www.edaplayground.com/x/HZ6h).
+```verilog
+module test();
+ 
+  task static static_add(int a, int b, output int c);
+    c = a + b;
+  endtask
+  
+  task automatic automatic_add(int a, int b, output int c);
+    c = a + b;
+  endtask
+ 
+  initial begin
+    longint N = 500000000; // iterations
+    longint M = 4; // rounds
+    int xz;
+    $display("Test static");
+    repeat(M) begin
+      $system("echo $(($(date +%s%N)/1000000)) >./st"); // that's how we get miliseconds
+      repeat(N) begin
+        int c;
+        static_add(1, 2, c);
+      end
+      $system("echo $(($(date +%s%N)/1000000)) >./end");
+      $system("s=`cat./st`; e=`cat./end`; echo `expr $e - $s`");
+    end
+    
+    $display("Test automatic");
+    repeat(M) begin
+      $system("echo $(($(date +%s%N)/1000000)) >./st");
+      repeat(N) begin
+        int c;
+        automatic_add(1, 2, c);
+      end
+      $system("echo $(($(date +%s%N)/1000000)) >./end");
+      $system("s=`cat./st`; e=`cat./end`; echo `expr $e - $s`");
+    end
+    
+  end
+    
+endmodule
+```
+Let's measure the time it takes to call the static and automatic task to add two numbers 500 million times. Repeat 8 times for each of the available simulators and average. The results are below.
+
+| Simulator | Static, ms | Automatic, ms | Automatic is faster, % |
+| --------- | ---------- | ------------- | ---------------------- | 
+| Riviera   | 4359.5     | 2995.875      | 31                     |
+| Xcelium   | 1489.25    | 957.5         | 36                     |
+| Questa    | 3869.375   | 4562.125      | -18                    |
+| VCS       | 4945.125   | 4459          | 10                     |
+
+The automatic subroutine was faster for three simulators and slower for one. Does it seem counterintuitive? Let's recall, that the static subroutine doesn't need to allocate memory for its variable. But it also means that it **has to find its variables in the memory**, where they persist. On the other hand, allocating memory on the stack by automatic subroutines is fast.
+
+Of course, there are other, simulator-specific processes at play, so we can only guess about the true reasons of these results. On the bright side, such a difference will not probably be noticeable in the real testbench, so just choose whatever subroutine type suits your needs. 
+
+Now let's turn to class methods. Can we make a good guess about the contest's outcome? Alas, it's even harder. There are two differences between a static method and a non-static method that can affect performance:
+- A non-static method has a hidden argument. When we call `object.fun(some_arg)`, this is converted to `fun(object, some_arg)` at compilation. Handling this additional argument will take non-zero time.
+- It may not be known at compile time which non-static method to call. If a pointer to an object is of type `foo`, then in fact it can point to both an object of type `foo` and its descendant, which can have its own non-static method definition. Which class method should be called will only be known during simulation (this is called [dynamic dispatch](https://en.wikipedia.org/wiki/Dynamic_dispatch)). However, in many cases (when the method is not virtual, for example), the answer to this question is unambiguous and known at compile time ([static dispatch](https://en.wikipedia.org/wiki/Static_dispatch)). But is the compiler capable of this optimization?
+
+Let's use the following code to [experiment](https://edaplayground.com/x/tbtG)
+
+```verilog
+class foo;
+  static task static_add(int a, int b, output int c);
+    c = a + b;
+  endtask
+  
+  task nonstatic_add(int a, int b, output int c);
+    c = a + b;
+  endtask
+  
+  static task do_test();
+    foo handle = new();
+    longint N = 500000000; // iterations
+    longint M = 2; // rounds
+    $display("Test static");
+    repeat(M) begin
+      $system("echo $(($(date +%s%N)/1000000)) >./st"); // that's how we get milliseconds
+      repeat(N) begin
+        int c;
+        foo::static_add(1, 2, c); 
+      end
+      $system("echo $(($(date +%s%N)/1000000)) >./end");
+      $system("s=`cat./st`; e=`cat./end`; echo `expr $e - $s`");
+    end
+    
+    $display("Test automatic");
+    repeat(M) begin
+      $system("echo $(($(date +%s%N)/1000000)) >./st");
+      repeat(N) begin
+        int c;
+        handle.nonstatic_add(1, 2, c);
+      end
+      $system("echo $(($(date +%s%N)/1000000)) >./end");
+      $system("s=`cat./st`; e=`cat./end`; echo `expr $e - $s`");
+    end
+  endtask
+endclass
+
+module test();
+  foo handle = new();
+ 
+  task automatic do_test();
+    longint N = 500000000; // iterations
+    longint M = 2; // rounds
+    $display("Test static");
+    repeat(M) begin
+      $system("echo $(($(date +%s%N)/1000000)) >./st"); // that's how we get milliseconds
+      repeat(N) begin
+        int c;
+        foo::static_add(1, 2, c); 
+      end
+      $system("echo $(($(date +%s%N)/1000000)) >./end");
+      $system("s=`cat./st`; e=`cat./end`; echo `expr $e - $s`");
+    end
+    
+    $display("Test non-static");
+    repeat(M) begin
+      $system("echo $(($(date +%s%N)/1000000)) >./st");
+      repeat(N) begin
+        int c;
+        handle.nonstatic_add(1, 2, c);
+      end
+      $system("echo $(($(date +%s%N)/1000000)) >./end");
+      $system("s=`cat./st`; e=`cat./end`; echo `expr $e - $s`");
+    end
+  endtask
+  
+  initial begin
+    automatic bit is_module = 1;
+    if (is_module)
+      do_test();
+    else
+      foo::do_test();
+  end  
+endmodule
+```
+
+It will soon become clear to you why we repeat the experiment twice: we call the method not only from a module, but also from the class itself.
+
+Results for calling two methods from a module
+
+| Simulator | Static, ms | Nonstatic, ms | Nonstatic is faster, % |
+| --------- | ---------- | ------------- | ---------------------- |
+| Riviera   | 6848       | 7152          | -4                     |
+| Xcelium   | 5778       | 12084         | -109                   |
+| Questa    | 5208       | 12051         | -131                   |
+| VCS       | 7850       | 7981          | -1                     |
+
+We said that a non-static method could be slower than a static one, and that's how it turned out for Cadence and Mentor. In the case of Questa, the slowdown turned out to be almost 2.5 times. Riviera and VCS appear to be capable of the optimizations mentioned above.
+
+Curious is something else. A static class method should be very similar in overhead to an automatic module routine. The difference with the previous table, however, is huge. Maybe the point is that the call to the class methods comes from a module? Let's check and switch `is_module` to 0.
+
+| Simulator | Static, ms | Nonstatic, ms | Nonstatic is faster, % |
+| --------- | ---------- | ------------- | ---------------------- |
+| Riviera   | 6030       | 7588          | -26                    |
+| Xcelium   | 1821       | 12980         | -613                   |
+| Questa    | 5367       | 11980         | -123                   |
+| VCS       | 5487       | 5577          | -2                     |
+
+What do we have here? The call to a static method in Xcelium has noticeably accelerated. Apparently, calling a method from a module required a more complex search for the address of the method than calling it from a class. The time of calling both methods in VCS has noticeably changed. All other numbers have changed just slightly and can be considered a measurement error.
+
+This experiment is not enough to explain the lack of acceleration of the automatic method call in Riviera, Xcelium and Questa. Finding out the specific reason, which, even worse, may differ for different simulators, is beyond the scope of this article.
+
+What recommendations can be made based on these results? As it is often the case with performance issues, you need to evaluate each specific case and take into account the following points.
+1.  In our example, we used a very lightweight method that was called a lot of times. Often a method performs much heavier computations. 
+2.  Most of the CPU time is spent on the RTL code simulation, not on the testbench.
+3.  It is possible that someday you will need to access non-static variables from a static method. This means time for refactoring.
+4.  For most workflows, the verification code is concentrated primarily in classes. There should be a good reason to move some code to a module, otherwise, you risk getting some spaghetti on your hands.
+
+Therefore, the only general recommendation is this: do not sacrifice convenience for performance unless you can prove the need for this sacrifice. This proof will most likely involve simulation in profiling mode.
+
+If you're concerned about the performance of your testbench, I recommend reading this [article](https://fpga--systems-ru.translate.goog/go?http://www.sunburst-design.com/papers/CummingsDVCon2019_Yikes_SV_Coding_rev1_0.pdf&_x_tr_sl=ru&_x_tr_tl=en&_x_tr_hl=en-US&_x_tr_pto=wapp "http://www.sunburst-design.com/papers/CummingsDVCon2019_Yikes_SV_Coding_rev1_0.pdf") before you start blasting.
+
+### What about synthesis?
+If a subroutine is purely computational, like addition in our examples, then everything is clear: if an expression can be synthesized, the subroutine will be synthesized. Whether it is static or automatic, it does not play a significant role here, because such a method does not consume time.
+
+But what if we add a static variable to the subroutine?
+
+By standard, the value of a variable must persist between calls. Will a register be created during synthesis? Let's check in Vivado 2018.2.
+```verilog
+module main(
+    input clk,
+    input rst,
+    output logic[3:0] my_cnt
+    );
+    
+    task cnt_task(output logic[3:0] cnt_out);
+        static logic[3:0] cnt_var = 0;
+        cnt_var = cnt_var + 1;
+        cnt_out = cnt_var;
+    endtask
+    
+    always @(posedge clk or posedge rst) begin
+        if (rst == 1) begin
+            my_cnt <= 0;
+        end
+        else begin : wat
+            logic[3:0] tmp_cnt;
+            cnt_task(tmp_cnt);
+            cnt_task(tmp_cnt);
+            my_cnt <= tmp_cnt;
+        end
+    end       
+endmodule
+```
+
+You should already expect that in the simulation, with each rising edge of `clk`, the value of `my_cnt` will increase by 2. And Vivado's behavioural simulation show exactly this.
+
+What do we see in the diagram?
+
+![](_images/statics/vivada.png)
+Epic fail. Why did Vivado even agree to synthesize it?
+
+On this not-so-positive note, let's move on to the conclusion.
+
+## Conclusion
+- The memory for a static variable is allocated when the simulation starts. The memory for an automatic variable is allocated when the simulation enters the scope of the variable.
+- A module's static subroutine is a subroutine whose variables, including input arguments, are static by default. Module's subroutines are static by default. Declaration is `static task|function`
+- A module's automatic subroutine is a subroutine whose variables, including the input arguments, are all automatic. Declaration is `automatic task|function`
+- The lifetime of a subroutine variable can be changed using the `static` and `automatic` keywords.
+- Using automatic subroutines is safer.
+- A static class method belongs to the class, not to the instance. It cannot access non-static class properties. The local variables of such a method are automatic by default. Declaration is `static task|function`.
+- A static class property belongs to the class and is shared by all instances.
+- The standard forbids making methods static in the sense of subroutines.
+- Static methods and properties help implement the singleton and factory patterns, as well as group methods that are similar in meaning into one class.
+- In general, the choice between a static and a non-static class method should be driven by convenience, not performance
