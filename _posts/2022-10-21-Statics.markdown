@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "Statics in SystemVerilog"
-date:   2022-10-22 12:11:16 +0300
+date:   2022-10-21 12:11:16 +0300
 ---
 
 # Statics in SystemVerilog
@@ -114,7 +114,7 @@ The input arguments of the `static_add` subroutine are static, that is, they alw
 In contrast, for our subroutine's automatic brother, `automatic_add`, memory allocation for `a` and `b` occurs on each call, so each call will see its input argument value.
 
 A more detailed explanation of what is happening is presented in the following diagram.
-![](_images/statics/Static%20and%20Automatic%20Subroutines%20eng.png)
+![]({{ site.baseurl }}/assets/images/statics/Static%20and%20Automatic%20Subroutines%20eng.png)
 
 The ability to safely call the same subroutine from different processes is called [reentrancy](https://en.wikipedia.org/wiki/Reentrancy_(computing)). Using such subroutines reduces unexpected side effects and is considered to be a good practice.
 
@@ -455,7 +455,7 @@ endmodule
 A few things shall be highlighted here. First, you can see that the static class variable `static_count` is common to all instances. Secondly, we can refer to it both by the instance and by the class name. Third, repeated calls to the non-static `good_increment` method increment the value of the same variable, as expected.
 
 The following diagram shows a detailed breakdown of the example.
-![](_images/statics/Static%20and%20Automatic%20in%20classes%20eng.png)
+![]({{ site.baseurl }}/assets/images/statics/Static%20and%20Automatic%20in%20classes%20eng.png)
 
 Let's recall the example of running processes from a loop. Since variables in module routines have a static lifetime by default, we had to declare an intermediate automatic variable. In classes, however, this is redundant: method variables are automatic by default. So, the following code is enough for proper execution:
 ```verilog
@@ -810,7 +810,7 @@ You should already expect that in the simulation, with each rising edge of `clk`
 
 What do we see in the diagram?
 
-![](_images/statics/vivada.png)
+![]({{ site.baseurl }}/assets/images/statics/vivada.png)
 Epic fail. Why did Vivado even agree to synthesize it?
 
 On this not-so-positive note, let's move on to the conclusion.
