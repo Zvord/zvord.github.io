@@ -47,7 +47,7 @@ layout: default
     </a>
 
     {% if thumbnail != "" %}
-    <div class="post-image post-image-small center">
+    <div class="post-image post-image-small">
       <a href="{{ post.url | absolute_url }}" aria-label="Thumbnail">
         <img src="{{ thumbnail | absolute_url }}" alt="Post thumbnail" width = 500 class="center">
       </a>
