@@ -1,5 +1,5 @@
 ---
-layout: post
+layout: default
 title:  "Untangling Virtual Methods"
 date:   2022-10-22 16:11:16 +0300
 ---
