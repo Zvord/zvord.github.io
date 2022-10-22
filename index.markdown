@@ -46,26 +46,17 @@ layout: default
       {% endif %}
     </a>
 
-    <p class="post-meta">
-      {% assign date_format = site.date_format | default: "%B %-d, %Y" %}
-      Posted on {{ post.date | date: date_format }}
-    </p>
-
     {% if thumbnail != "" %}
-    <div class="post-image post-image-small">
+    <div class="post-image post-image-small center">
       <a href="{{ post.url | absolute_url }}" aria-label="Thumbnail">
-        <img src="{{ thumbnail | absolute_url }}" alt="Post thumbnail">
+        <img src="{{ thumbnail | absolute_url }}" alt="Post thumbnail" width = 500 class="center">
       </a>
     </div>
     {% endif %}
 
+
     {% unless site.feed_show_excerpt == false %}
     {% if thumbnail != "" %}
-    <div class="post-image post-image-short">
-      <a href="{{ post.url | absolute_url }}" aria-label="Thumbnail">
-        <img src="{{ thumbnail | absolute_url }}" alt="Post thumbnail">
-      </a>
-    </div>
     {% endif %}
 
     <div class="post-entry">
@@ -77,6 +68,11 @@ layout: default
       {% endif %}
     </div>
     {% endunless %}
+
+    <p class="post-meta">
+      {% assign date_format = site.date_format | default: "%B %-d, %Y" %}
+      Posted on {{ post.date | date: date_format }}
+    </p>
 
     {% if site.feed_show_tags != false and post.tags.size > 0 %}
     <div class="blog-tags">

@@ -2,11 +2,13 @@
 layout: default
 title:  "Statics in SystemVerilog"
 date:   2022-10-21 12:11:16 +0300
+cover-img: "/assets/images/statics/plasma-bal-gba531b96c_1280.jpg"
 ---
 
-This is a translation of my [original post on FPGA-Systems](https://fpga-systems.ru/publ/jazyki/systemverilog/staticheskoe_v_systemverilog/13-1-0-142), an awesome Russian-speaking community for everything FPGA.
 
 There may be some confusion between static tasks and functions in classes and modules, as well as subtle differences between various simulators' behaviour in this regard. I try to shed some light on the nature of static things in SystemVerilog. If you already understand it, I suggest going straight to the [Experiments](#experiments) section. Some findings there might surprise you.
+
+This is a translation of my [original post on FPGA-Systems](https://fpga-systems.ru/publ/jazyki/systemverilog/staticheskoe_v_systemverilog/13-1-0-142), an awesome Russian-speaking community for everything FPGA.
 
 ![]({{ site.baseurl }}/assets/images/statics/plasma-bal-gba531b96c_1280.jpg)
 

@@ -2,13 +2,15 @@
 layout: default
 title:  "Untangling Virtual Methods"
 date:   2022-10-22 16:11:16 +0300
+cover-img: "assets/images/virtual/madmark.png"
 ---
+
+I'm one of those weird guys who from time to time write answers on [r/systemverilog](https://www.reddit.com/r/systemverilog/). One day I saw there a rather simple question from my point of view: what is a virtual method? A protracted discussion showed that the question isn't that simple if you come to SystemVerilog with no OOP experience in other languages. Inheritance, method overrides, reference types - all these are the concepts crucial to understanding virtual methods work.
+
+Let's try to figure it out.
 
 ![]({{ site.baseurl }}/assets/images/virtual/madmark.png)
 
-I'm one of those weird guys who from time to time write answers on [r/systemverilog](https://www.reddit.com/r/systemverilog/) One day I saw there a rather simple question from my point of view: what is a virtual method? A protracted discussion showed that the question isn't that simple if you come to SystemVerilog with no OOP experience in other languages. Inheritance, method overrides, reference types - all these are the concepts crucial to understanding virtual methods work.
-
-Let's try to figure it out.
 
 Referring to the language standard, we will mean [1800-2017 - IEEE Standard for SystemVerilog](https://ieeexplore.ieee.org/document/8299595). The code will be tested in four simulators: Riviera, VCS, Xcelium, Questa, but EDA Playground without a corporate account is enough to reproduce all examples.
 
