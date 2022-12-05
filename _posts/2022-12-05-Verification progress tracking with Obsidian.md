@@ -1,5 +1,3 @@
-# Verification progress tracking with Obsidian
-
 I have done some questionable things in my life and creating a verification progress tracker in a note-taking app is definetely one of them. But it's too fun to keep it for myself, so here we are.
 
 ![]({{ site.baseurl }}/assets/images/vptd/obsidian.png)
