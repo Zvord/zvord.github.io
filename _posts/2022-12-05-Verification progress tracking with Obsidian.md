@@ -1,3 +1,10 @@
+---
+layout: default
+title:  "Verification Progress Tracking with Obsidian"
+date:   2022-10-22 16:11:16 +0300
+cover-img: "/assets/images/vptd/obsidian.png"
+---
+
 I have done some questionable things in my life and creating a verification progress tracker in a note-taking app is definetely one of them. But it's too fun to keep it for myself, so here we are.
 
 ![]({{ site.baseurl }}/assets/images/vptd/obsidian.png)
