@@ -80,6 +80,19 @@ To simplify a page creation there are templates. Here's the one for a requiremen
 #requirement 
 ```
 To use it create a new page, hit Cmd+P (on Mac) and type "Insert template".
+
+Sometimes we have requirements that are too big and complex and have to be split into a number of smaller requirements. One such requirement from our example is **Jump**:
+````markdown
+A cat should be able to jump: perform an explosive movement with rapid change of location in the direction in any combination of forward and upward.
+
+Subrequirement:: [[Jump vertically from lying position]]
+Subrequirement:: [[Jump vertically from standing position]]
+
+#requirement_group 
+````
+I assign a different tag for such requirements because they have to be processed quite differently from their simplier counterparts.
+
+Subrequirements are listed with the prefix **Subrequirement ::**. This is a Dataview inline field. We will use it to find complex requirements for which at least one subrequirement is not covered.
 #### Testcases
 Jumping to "Vertical Jump testcase" reveals the next file:
 ```markdown
@@ -162,6 +175,44 @@ First, we shall exclude the Templates folder with `-"Templates"`. We've already 
 - finally, `tags` is a list of tags in the file.
 
 To see the list of all implicit fields, check out the [Dataview documentation](https://blacksmithgu.github.io/obsidian-dataview/annotation/metadata-tasks/)
+
+The task to find all uncovered requirement groups is much more complex. A requirement group can be composed of other requirement groups and simple requirements and we have to analyze a tree. I don't think it can be solved with Dataview queries, but fortunatelly, Dataview allows us to write JavaScript code.
+````markdown
+```dataviewjs
+function is_uncovered(req_page) {
+	return (!req_page.file.outlinks.file.tags.includes("#testcase")) ||
+           (!req_page.file.outlinks.file.tags.includes("#covergroup") &&
+            !req_page.file.outlinks.file.tags.includes("#coverpoint"));
+};
+
+let req_groups = dv.array(dv.pages('#requirement_group and -"Templates"'));
+let uncovered_reqs = new Set();
+for (let top_req of req_groups) {
+	let pages = new Set();
+	let stack = [top_req];
+	while (stack.length > 0) {
+	    let elem = stack.pop();
+		let subreqs = elem.Subrequirement;    
+	    for (let sr of dv.array(subreqs)) {
+		    if (!sr)
+			    continue;
+			let p = dv.page(sr.path);
+			if (p.file.tags.includes("#requirement")) {
+				pages.add(sr.path);
+			}
+	        stack.push(p);
+	    }
+	}
+	pages = dv.array(Array.from(pages)).map(p => dv.page(p));
+	if (pages.some(is_uncovered))
+		uncovered_reqs.add(top_req);	
+}
+let links = dv.array(Array.from(uncovered_reqs)).map(p => p.file.link);
+dv.list(links)
+```
+````
+
+The `uncovered` function checks the same condition as the preivous Dataview query, but uses a JS syntax. The code collects fringe requirements and if some of them are uncovered, adds the requirement group to the list.
 
 To find the requirements with failing testcases, we need to access the `Status` field of the testcase page. Recall, that we listed all the fields in the YAML frontmatter, so that's the implicit field we shall access now.
 ````markdown
